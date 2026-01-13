@@ -1,0 +1,2 @@
+[functions.detect-pii]
+verify_jwt = false
