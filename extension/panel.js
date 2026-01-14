@@ -1,66 +1,89 @@
-const SUPABASE_URL =
+const DETECT_BTN = document.getElementById("detectBtn");
+const APPLY_BTN = document.getElementById("applyBtn");
+const ITEMS_EL = document.getElementById("items");
+const STATUS_EL = document.getElementById("status");
+
+const SUPABASE_FN =
   "https://fmyczyfgohmslbfstiqu.supabase.co/functions/v1/detect-pii";
 
-const detectBtn = document.getElementById("detectBtn");
-const applyBtn = document.getElementById("applyBtn");
-const itemsDiv = document.getElementById("items");
+let lastItems = [];
 
-let detectedItems = [];
+/* ---------- Helpers ---------- */
 
-detectBtn.onclick = async () => {
-  itemsDiv.innerHTML = "Detecting…";
-  applyBtn.disabled = true;
+function badgeColor(item) {
+  return item.sensitivity === "sensitive" ? "red" : "blue";
+}
 
-  const { lastText } = await chrome.storage.local.get("lastText");
+function renderItems(items) {
+  ITEMS_EL.innerHTML = "";
+  STATUS_EL.textContent = `${items.length} PII items detected`;
 
-  const res = await fetch(SUPABASE_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: lastText || "" })
-  });
-
-  const data = await res.json();
-
-  detectedItems = data.items.map((i) => ({
-    ...i,
-    enabled: true
-  }));
-
-  render();
-};
-
-applyBtn.onclick = () => {
-  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-    chrome.tabs.sendMessage(tab.id, {
-      type: "APPLY_REDACTION",
-      items: detectedItems
-    });
-  });
-};
-
-function render() {
-  itemsDiv.innerHTML = "";
-  applyBtn.disabled = false;
-
-  detectedItems.forEach((item, idx) => {
+  items.forEach((item) => {
     const card = document.createElement("div");
-    card.className =
-      "card " + (item.sensitivity === "sensitive" ? "sensitive" : "basic");
+    card.className = `card ${badgeColor(item)}`;
 
     card.innerHTML = `
-      <label>
-        <input type="checkbox" ${item.enabled ? "checked" : ""}/>
-        <strong>${item.type}</strong><br/>
-        <span>${item.span}</span><br/>
-        <small>→ ${item.replacement}</small>
-      </label>
+      <div class="card-header">
+        <strong>${item.type}</strong>
+        <span class="pill ${badgeColor(item)}">
+          ${item.sensitivity}
+        </span>
+      </div>
+
+      <div class="card-value">${item.span}</div>
+
+      <div class="card-expl">
+        ${item.explanation}
+      </div>
+
+      <div class="card-repl">
+        → ${item.replacement}
+      </div>
     `;
 
-    card.querySelector("input").onchange = (e) => {
-      detectedItems[idx].enabled = e.target.checked;
-    };
-
-    itemsDiv.appendChild(card);
+    ITEMS_EL.appendChild(card);
   });
 }
+
+/* ---------- Detect ---------- */
+
+DETECT_BTN.addEventListener("click", async () => {
+  STATUS_EL.textContent = "Detecting…";
+  ITEMS_EL.innerHTML = "";
+
+  chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => document.activeElement?.innerText || document.activeElement?.value || ""
+    });
+
+    if (!result) {
+      STATUS_EL.textContent = "No editable text found";
+      return;
+    }
+
+    const res = await fetch(SUPABASE_FN, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: result })
+    });
+
+    const data = await res.json();
+    lastItems = data.items || [];
+
+    renderItems(lastItems);
+
+    chrome.tabs.sendMessage(tab.id, {
+      type: "UNDERLINE_PII",
+      items: lastItems
+    });
+  });
+});
+
+/* ---------- Apply (next step) ---------- */
+
+APPLY_BTN.addEventListener("click", () => {
+  alert("Apply Redaction comes next — underline phase complete ✔️");
+});
+
 
