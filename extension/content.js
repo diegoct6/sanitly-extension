@@ -10,6 +10,17 @@ function isEditable(el) {
   );
 }
 
+function getTextFromElement(el) {
+  if (!el) return "";
+  if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+    return el.value || "";
+  }
+  if (el.isContentEditable) {
+    return el.innerText || "";
+  }
+  return "";
+}
+
 function createBubble() {
   if (bubble) return;
 
@@ -27,35 +38,39 @@ function createBubble() {
   bubble.style.cursor = "pointer";
   bubble.style.zIndex = "2147483647";
 
-  bubble.addEventListener("mousedown", function (e) {
+  bubble.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
 
+    if (!lastEl) return;
+
     chrome.runtime.sendMessage({
       type: "OPEN_PANEL",
-      text: lastEl.value || lastEl.innerText || ""
+      text: getTextFromElement(lastEl)
     });
   });
 
   document.body.appendChild(bubble);
 }
 
-function showBubble(el) {
-  createBubble();
-  lastEl = el;
+function positionBubble(el) {
+  if (!el || !bubble) return;
 
-  const r = el.getBoundingClientRect();
-  bubble.style.top = r.bottom + window.scrollY + 6 + "px";
-  bubble.style.left = r.right + window.scrollX - 24 + "px";
+  const rect = el.getBoundingClientRect();
+  bubble.style.top = `${rect.bottom + window.scrollY + 6}px`;
+  bubble.style.left = `${rect.right + window.scrollX - 28}px`;
   bubble.style.display = "flex";
 }
 
-function hideBubble() {
-  if (bubble) bubble.style.display = "none";
-}
+document.addEventListener("focusin", (e) => {
+  const el = e.target;
+  if (!isEditable(el)) return;
 
-document.addEventListener("focusin", function (e) {
-  if (isEditable(e.target)) showBubble(e.target);
+  lastEl = el;
+  createBubble();
+  positionBubble(el);
 });
 
-document.addEventListener("focusout", hideBubble);
+document.addEventListener("focusout", () => {
+  if (bubble) bubble.style.display = "none";
+});

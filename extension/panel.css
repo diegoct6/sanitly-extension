@@ -1,35 +1,132 @@
 body {
-    font-family: system-ui, -apple-system, sans-serif;
-    margin: 0;
-    padding: 12px;
-    background: #f9fafb;
-  }
-  
-  header {
-    margin-bottom: 12px;
-  }
-  
-  header strong {
-    display: block;
-    font-size: 16px;
-  }
-  
-  header span {
-    font-size: 12px;
-    color: #6b7280;
-  }
-  
-  button {
-    width: 100%;
-    padding: 8px;
-    background: #16a34a;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  
-  #items {
-    margin-top: 12px;
-  }
-  
+  font-family: system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 12px;
+  background: #f9fafb;
+}
+
+header {
+  margin-bottom: 12px;
+}
+
+header strong {
+  display: block;
+  font-size: 16px;
+}
+
+header span {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#items {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  background: white;
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+/* BASIC vs SENSITIVE */
+.card.basic {
+  border-left: 4px solid #3b82f6;
+  background: #eff6ff;
+}
+
+.card.sensitive {
+  border-left: 4px solid #ef4444;
+  background: #fef2f2;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.badge.basic {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge.sensitive {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.value {
+  margin-top: 6px;
+  font-family: monospace;
+}
+
+.hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.replacement {
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  width: 34px;
+  height: 18px;
+}
+
+.switch input {
+  display: none;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 999px;
+}
+
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  top: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.switch input:checked + .slider {
+  background: #16a34a;
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(16px);
+}
