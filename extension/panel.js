@@ -1,89 +1,58 @@
-const DETECT_BTN = document.getElementById("detectBtn");
-const APPLY_BTN = document.getElementById("applyBtn");
-const ITEMS_EL = document.getElementById("items");
-const STATUS_EL = document.getElementById("status");
+const detectBtn = document.getElementById("detectBtn");
+const applyBtn = document.getElementById("applyBtn");
+const itemsDiv = document.getElementById("items");
 
-const SUPABASE_FN =
-  "https://fmyczyfgohmslbfstiqu.supabase.co/functions/v1/detect-pii";
+let detected = [];
 
-let lastItems = [];
+detectBtn.onclick = async () => {
+  itemsDiv.innerHTML = "Detecting…";
 
-/* ---------- Helpers ---------- */
+  const { sanitly_text } = await chrome.storage.local.get("sanitly_text");
 
-function badgeColor(item) {
-  return item.sensitivity === "sensitive" ? "red" : "blue";
-}
-
-function renderItems(items) {
-  ITEMS_EL.innerHTML = "";
-  STATUS_EL.textContent = `${items.length} PII items detected`;
-
-  items.forEach((item) => {
-    const card = document.createElement("div");
-    card.className = `card ${badgeColor(item)}`;
-
-    card.innerHTML = `
-      <div class="card-header">
-        <strong>${item.type}</strong>
-        <span class="pill ${badgeColor(item)}">
-          ${item.sensitivity}
-        </span>
-      </div>
-
-      <div class="card-value">${item.span}</div>
-
-      <div class="card-expl">
-        ${item.explanation}
-      </div>
-
-      <div class="card-repl">
-        → ${item.replacement}
-      </div>
-    `;
-
-    ITEMS_EL.appendChild(card);
-  });
-}
-
-/* ---------- Detect ---------- */
-
-DETECT_BTN.addEventListener("click", async () => {
-  STATUS_EL.textContent = "Detecting…";
-  ITEMS_EL.innerHTML = "";
-
-  chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => document.activeElement?.innerText || document.activeElement?.value || ""
-    });
-
-    if (!result) {
-      STATUS_EL.textContent = "No editable text found";
-      return;
-    }
-
-    const res = await fetch(SUPABASE_FN, {
+  const res = await fetch(
+    "https://fmyczyfgohmslbfstiqu.supabase.co/functions/v1/detect-pii",
+    {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: result })
-    });
+      body: JSON.stringify({ text: sanitly_text })
+    }
+  );
 
-    const data = await res.json();
-    lastItems = data.items || [];
+  const data = await res.json();
+  detected = data.items.map((i) => ({ ...i, enabled: true }));
 
-    renderItems(lastItems);
+  render();
+};
 
-    chrome.tabs.sendMessage(tab.id, {
-      type: "UNDERLINE_PII",
-      items: lastItems
-    });
+applyBtn.onclick = async () => {
+  const { sanitly_source } = await chrome.storage.local.get("sanitly_source");
+
+  chrome.runtime.sendMessage({
+    type: "APPLY_REDACTION",
+    tabId: sanitly_source.tabId,
+    replacements: detected.filter((d) => d.enabled)
   });
-});
+};
 
-/* ---------- Apply (next step) ---------- */
+function render() {
+  itemsDiv.innerHTML = "";
 
-APPLY_BTN.addEventListener("click", () => {
-  alert("Apply Redaction comes next — underline phase complete ✔️");
-});
+  detected.forEach((d, idx) => {
+    const card = document.createElement("div");
+    card.className = `card ${d.category === "identity" ? "basic" : "sensitive"}`;
 
+    card.innerHTML = `
+      <label>
+        <input type="checkbox" ${d.enabled ? "checked" : ""}/>
+        <strong>${d.type}</strong><br/>
+        <small>${d.span}</small>
+      </label>
+    `;
 
+    card.querySelector("input").onchange = (e) => {
+      detected[idx].enabled = e.target.checked;
+    };
+
+    itemsDiv.appendChild(card);
+  });
+}

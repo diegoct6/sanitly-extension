@@ -1,117 +1,76 @@
 let bubble = null;
 let lastEl = null;
 
-/**
- * Editable field detection
- */
 function isEditable(el) {
-  if (!el) return false;
-  if (el.tagName === "TEXTAREA") return true;
-  if (el.tagName === "INPUT" && el.type === "text") return true;
-  if (el.isContentEditable) return true;
-  return false;
+  return (
+    el &&
+    (el.tagName === "TEXTAREA" ||
+      (el.tagName === "INPUT" && el.type === "text") ||
+      el.isContentEditable)
+  );
 }
 
-/**
- * Create bubble once
- */
 function createBubble() {
   if (bubble) return;
 
   bubble = document.createElement("div");
   bubble.textContent = "🔒";
-  bubble.style.position = "absolute";
-  bubble.style.width = "28px";
-  bubble.style.height = "28px";
-  bubble.style.borderRadius = "50%";
-  bubble.style.background = "#2563eb";
-  bubble.style.color = "white";
-  bubble.style.display = "none";
-  bubble.style.alignItems = "center";
-  bubble.style.justifyContent = "center";
-  bubble.style.cursor = "pointer";
-  bubble.style.zIndex = "2147483647";
-  bubble.style.boxShadow = "0 4px 10px rgba(0,0,0,0.15)";
-  bubble.style.userSelect = "none";
+  Object.assign(bubble.style, {
+    position: "absolute",
+    width: "28px",
+    height: "28px",
+    borderRadius: "50%",
+    background: "#2563eb",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 2147483647,
+    fontSize: "14px"
+  });
 
   bubble.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
-
     if (!lastEl) return;
-    if (!chrome?.runtime?.id) return;
 
-    const text = lastEl.isContentEditable
-      ? lastEl.innerText
-      : lastEl.value || "";
-
-    // 🔒 HARD GUARD: never let this throw
-    try {
-      chrome.runtime.sendMessage(
-        {
-          type: "OPEN_PANEL",
-          text
-        },
-        () => {
-          // Ignore runtime.lastError silently
-          void chrome.runtime?.lastError;
-        }
-      );
-    } catch (_) {
-      // Context invalidated → ignore safely
-    }
+    chrome.runtime.sendMessage({
+      type: "OPEN_PANEL",
+      text: lastEl.value || lastEl.innerText || ""
+    });
   });
 
   document.body.appendChild(bubble);
 }
 
-/**
- * Position bubble
- */
 function positionBubble(el) {
-  if (!bubble || !el) return;
-
-  const rect = el.getBoundingClientRect();
-  bubble.style.top = `${rect.bottom + window.scrollY - 32}px`;
-  bubble.style.left = `${rect.right + window.scrollX - 32}px`;
+  const r = el.getBoundingClientRect();
+  bubble.style.top = `${r.bottom + window.scrollY - 8}px`;
+  bubble.style.left = `${r.right + window.scrollX - 32}px`;
   bubble.style.display = "flex";
 }
 
-/**
- * Hide bubble
- */
-function hideBubble() {
-  if (bubble) bubble.style.display = "none";
-}
-
-/**
- * Focus tracking
- */
 document.addEventListener("focusin", (e) => {
-  const el = e.target;
-  if (!isEditable(el)) return;
-
-  lastEl = el;
+  if (!isEditable(e.target)) return;
+  lastEl = e.target;
   createBubble();
-  positionBubble(el);
+  positionBubble(e.target);
 });
 
-/**
- * Hide when clicking elsewhere
- */
-document.addEventListener("mousedown", (e) => {
-  if (bubble && e.target === bubble) return;
-  hideBubble();
+document.addEventListener("focusout", () => {
+  if (bubble) bubble.style.display = "none";
 });
 
-/**
- * Keep position stable
- */
-window.addEventListener("scroll", () => {
-  if (lastEl) positionBubble(lastEl);
-});
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== "REDACT_TEXT" || !lastEl) return;
 
-window.addEventListener("resize", () => {
-  if (lastEl) positionBubble(lastEl);
-});
+  let text = lastEl.value || lastEl.innerText;
 
+  msg.replacements.forEach((r) => {
+    text = text.replaceAll(r.span, r.replacement);
+  });
+
+  if ("value" in lastEl) lastEl.value = text;
+  else lastEl.innerText = text;
+});

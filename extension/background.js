@@ -1,15 +1,19 @@
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg.type === "OPEN_PANEL") {
-    if (!sender.tab?.id) return;
-
-    chrome.sidePanel.open({
-      tabId: sender.tab.id
+    chrome.sidePanel.open({ tabId: sender.tab.id });
+    chrome.storage.local.set({
+      sanitly_text: msg.text,
+      sanitly_source: {
+        tabId: sender.tab.id,
+        frameId: sender.frameId
+      }
     });
+  }
 
-    // Forward text to panel
-    chrome.runtime.sendMessage({
-      type: "TEXT_FROM_PAGE",
-      text: msg.text || ""
+  if (msg.type === "APPLY_REDACTION") {
+    chrome.tabs.sendMessage(msg.tabId, {
+      type: "REDACT_TEXT",
+      replacements: msg.replacements
     });
   }
 });
