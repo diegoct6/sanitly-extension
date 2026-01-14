@@ -1,33 +1,52 @@
-function isEditable(el) {
-  if (!el) return false;
-
-  if (el.tagName === "TEXTAREA") return true;
-  if (el.tagName === "INPUT" && el.type === "text") return true;
-  if (el.isContentEditable) return true;
-
-  return false;
-}
-
-/* ---------------- Bubble ---------------- */
-
 let bubble = null;
+let lastEl = null;
+
+function isEditable(el) {
+  return (
+    el &&
+    (el.tagName === "TEXTAREA" ||
+      (el.tagName === "INPUT" && el.type === "text") ||
+      el.isContentEditable)
+  );
+}
 
 function createBubble() {
   if (bubble) return;
 
   bubble = document.createElement("div");
-  bubble.id = "sanitly-bubble";
   bubble.textContent = "🔒";
+  bubble.style.position = "absolute";
+  bubble.style.width = "28px";
+  bubble.style.height = "28px";
+  bubble.style.borderRadius = "50%";
+  bubble.style.background = "#16a34a";
+  bubble.style.color = "white";
+  bubble.style.display = "flex";
+  bubble.style.alignItems = "center";
+  bubble.style.justifyContent = "center";
+  bubble.style.cursor = "pointer";
+  bubble.style.zIndex = "2147483647";
+
+  bubble.addEventListener("mousedown", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    chrome.runtime.sendMessage({
+      type: "OPEN_PANEL",
+      text: lastEl.value || lastEl.innerText || ""
+    });
+  });
+
   document.body.appendChild(bubble);
 }
 
-function showBubbleNear(el) {
+function showBubble(el) {
   createBubble();
+  lastEl = el;
 
-  const rect = el.getBoundingClientRect();
-
-  bubble.style.top = `${rect.bottom + window.scrollY + 6}px`;
-  bubble.style.left = `${rect.right + window.scrollX - 24}px`;
+  const r = el.getBoundingClientRect();
+  bubble.style.top = r.bottom + window.scrollY + 6 + "px";
+  bubble.style.left = r.right + window.scrollX - 24 + "px";
   bubble.style.display = "flex";
 }
 
@@ -35,18 +54,8 @@ function hideBubble() {
   if (bubble) bubble.style.display = "none";
 }
 
-/* ---------------- Events ---------------- */
-
-document.addEventListener("focusin", (e) => {
-  const el = e.target;
-  if (!isEditable(el)) return;
-
-  console.log("[Sanitly] Active field detected:", el);
-  console.log("[Sanitly] Current value:", el.value || el.innerText);
-
-  showBubbleNear(el);
+document.addEventListener("focusin", function (e) {
+  if (isEditable(e.target)) showBubble(e.target);
 });
 
-document.addEventListener("focusout", () => {
-  hideBubble();
-});
+document.addEventListener("focusout", hideBubble);

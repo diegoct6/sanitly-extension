@@ -1,18 +1,19 @@
 {
-    "manifest_version": 3,
-    "name": "Sanitly – PII Guard",
-    "description": "Detect and redact personal data in text fields.",
-    "version": "0.1.0",
-    "permissions": [],
-    "host_permissions": [
-      "<all_urls>"
-    ],
-    "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["content.js"],
-        "css": ["styles.css"]
-      }
-    ]
-  }
-  
+  "manifest_version": 3,
+  "name": "Sanitly",
+  "version": "0.1",
+  "description": "Detect and redact personal data",
+  "permissions": ["sidePanel", "storage", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
