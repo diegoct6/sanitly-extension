@@ -1,5 +1,5 @@
 let bubble = null;
-let activeEl = null;
+let lastEl = null;
 
 function isEditable(el) {
   return (
@@ -15,47 +15,44 @@ function createBubble() {
 
   bubble = document.createElement("div");
   bubble.textContent = "🔒";
-  bubble.style.cssText = `
-    position:absolute;
-    width:28px;
-    height:28px;
-    border-radius:50%;
-    background:#2563eb;
-    color:white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    z-index:2147483647;
-    font-size:14px;
-  `;
+  bubble.style.position = "absolute";
+  bubble.style.width = "28px";
+  bubble.style.height = "28px";
+  bubble.style.borderRadius = "50%";
+  bubble.style.background = "#2563eb"; // BLUE (Grammarly-ish)
+  bubble.style.color = "white";
+  bubble.style.display = "flex";
+  bubble.style.alignItems = "center";
+  bubble.style.justifyContent = "center";
+  bubble.style.cursor = "pointer";
+  bubble.style.zIndex = "2147483647";
 
-  bubble.onclick = (e) => {
+  // IMPORTANT: use pointerdown, not click
+  bubble.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     e.stopPropagation();
+
     chrome.runtime.sendMessage({
       type: "OPEN_PANEL",
-      text: activeEl.value || activeEl.innerText || ""
+      text: lastEl?.value || lastEl?.innerText || ""
     });
-  };
+  });
 
   document.body.appendChild(bubble);
 }
 
-function positionBubble(el) {
-  const r = el.getBoundingClientRect();
-  bubble.style.top = `${r.bottom + window.scrollY + 6}px`;
-  bubble.style.left = `${r.right + window.scrollX - 28}px`;
+function showBubble(el) {
+  createBubble();
+  lastEl = el;
+
+  const rect = el.getBoundingClientRect();
+  bubble.style.top = `${rect.bottom + window.scrollY + 6}px`;
+  bubble.style.left = `${rect.right + window.scrollX - 24}px`;
   bubble.style.display = "flex";
 }
 
 document.addEventListener("focusin", (e) => {
-  if (!isEditable(e.target)) return;
-  activeEl = e.target;
-  createBubble();
-  positionBubble(activeEl);
-});
-
-document.addEventListener("focusout", () => {
-  if (bubble) bubble.style.display = "none";
+  if (isEditable(e.target)) {
+    showBubble(e.target);
+  }
 });
