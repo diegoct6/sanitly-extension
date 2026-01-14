@@ -3,7 +3,7 @@
   "name": "Sanitly",
   "version": "0.1",
   "description": "Detect & redact personal data",
-  "permissions": ["sidePanel", "activeTab"],
+  "permissions": ["sidePanel", "activeTab", "storage"],
   "background": {
     "service_worker": "background.js"
   },
