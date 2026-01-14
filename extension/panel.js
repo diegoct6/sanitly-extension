@@ -1,9 +1,11 @@
-const btn = document.getElementById("detectBtn");
+const btn = document.getElementById("detect");
 const itemsDiv = document.getElementById("items");
+const applyBtn = document.getElementById("apply");
+
+let detected = [];
 
 btn.onclick = async () => {
-  itemsDiv.textContent = "Detecting...";
-
+  itemsDiv.innerHTML = "Detecting...";
   const { lastText } = await chrome.storage.local.get("lastText");
 
   const res = await fetch(
@@ -16,21 +18,25 @@ btn.onclick = async () => {
   );
 
   const data = await res.json();
-  itemsDiv.innerHTML = "";
+  detected = data.items || [];
+  render();
 
-  data.items.forEach(item => {
-    const div = document.createElement("div");
-    div.className = `card ${item.sensitivity}`;
-    div.innerHTML = `<strong>${item.type}</strong><br/>${item.span}`;
-    itemsDiv.appendChild(div);
-  });
-
-  // 🔑 Send items back to content script
-  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-    chrome.tabs.sendMessage(tab.id, {
-      type: "HIGHLIGHT_PII",
-      items: data.items
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    chrome.tabs.sendMessage(tabs[0].id, {
+      type: "UNDERLINE",
+      items: detected
     });
   });
 };
+
+function render() {
+  itemsDiv.innerHTML = "";
+  detected.forEach(i => {
+    const d = document.createElement("div");
+    d.className = `card ${i.sensitivity}`;
+    d.innerHTML = `<b>${i.type}</b><br>${i.span}`;
+    itemsDiv.appendChild(d);
+  });
+  applyBtn.disabled = !detected.length;
+}
 

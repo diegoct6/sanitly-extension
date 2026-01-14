@@ -1,9 +1,12 @@
 let bubble = null;
 let lastEl = null;
-let highlights = [];
 
 function isEditable(el) {
-  return el && el.isContentEditable;
+  return el && (
+    el.tagName === "TEXTAREA" ||
+    (el.tagName === "INPUT" && el.type === "text") ||
+    el.isContentEditable
+  );
 }
 
 function createBubble() {
@@ -11,25 +14,27 @@ function createBubble() {
 
   bubble = document.createElement("div");
   bubble.textContent = "🔒";
-  bubble.style.position = "absolute";
-  bubble.style.width = "28px";
-  bubble.style.height = "28px";
-  bubble.style.borderRadius = "50%";
-  bubble.style.background = "#2563eb";
-  bubble.style.color = "white";
-  bubble.style.display = "flex";
-  bubble.style.alignItems = "center";
-  bubble.style.justifyContent = "center";
-  bubble.style.cursor = "pointer";
-  bubble.style.zIndex = "2147483647";
+  Object.assign(bubble.style, {
+    position: "absolute",
+    width: "28px",
+    height: "28px",
+    borderRadius: "50%",
+    background: "#2563eb",
+    color: "white",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 2147483647,
+    fontSize: "14px"
+  });
 
-  bubble.addEventListener("pointerdown", (e) => {
+  bubble.addEventListener("mousedown", e => {
     e.preventDefault();
     e.stopPropagation();
-
     chrome.runtime.sendMessage({
       type: "OPEN_PANEL",
-      text: lastEl.innerText || ""
+      text: lastEl.value || lastEl.innerText || ""
     });
   });
 
@@ -39,56 +44,53 @@ function createBubble() {
 function showBubble(el) {
   createBubble();
   lastEl = el;
-
-  const rect = el.getBoundingClientRect();
-  bubble.style.top = `${rect.bottom + window.scrollY + 6}px`;
-  bubble.style.left = `${rect.right + window.scrollX - 24}px`;
+  const r = el.getBoundingClientRect();
+  bubble.style.top = `${r.bottom + window.scrollY + 6}px`;
+  bubble.style.left = `${r.right + window.scrollX - 30}px`;
   bubble.style.display = "flex";
 }
 
-document.addEventListener("focusin", (e) => {
-  if (isEditable(e.target)) {
-    showBubble(e.target);
-  }
-});
-
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "HIGHLIGHT_PII") {
-    applyHighlights(msg.items);
-  }
-});
-
-function applyHighlights(items) {
-  if (!lastEl) return;
-
-  // Reset previous highlights
-  lastEl.innerHTML = lastEl.innerText;
-
-  let html = lastEl.innerHTML;
-
-  items.forEach(item => {
-    const color =
-      item.sensitivity === "sensitive" ? "#dc2626" : "#2563eb";
-
-    const underline = `
-      <span
-        class="sanitly-highlight"
-        style="
-          text-decoration: underline;
-          text-decoration-color: ${color};
-          text-decoration-thickness: 2px;
-          cursor: help;
-          position: relative;
-        "
-        title="${item.explanation}"
-      >
-        ${item.span}
-      </span>
-    `;
-
-    html = html.replace(item.span, underline);
-  });
-
-  lastEl.innerHTML = html;
+function hideBubble() {
+  if (bubble) bubble.style.display = "none";
 }
+
+document.addEventListener("focusin", e => {
+  if (isEditable(e.target)) showBubble(e.target);
+});
+
+document.addEventListener("focusout", hideBubble);
+
+// 🔥 SAFE UNDERLINE ENGINE
+function underlineText(root, spanText, sensitivity) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const idx = node.textContent.indexOf(spanText);
+    if (idx === -1) continue;
+
+    const range = document.createRange();
+    range.setStart(node, idx);
+    range.setEnd(node, idx + spanText.length);
+
+    const mark = document.createElement("span");
+    mark.textContent = spanText;
+    mark.style.textDecoration = "underline";
+    mark.style.textDecorationThickness = "2px";
+    mark.style.textDecorationColor =
+      sensitivity === "sensitive" ? "#dc2626" : "#2563eb";
+
+    range.deleteContents();
+    range.insertNode(mark);
+    break;
+  }
+}
+
+chrome.runtime.onMessage.addListener(msg => {
+  if (msg.type === "UNDERLINE" && lastEl?.isContentEditable) {
+    msg.items.forEach(i =>
+      underlineText(lastEl, i.span, i.sensitivity)
+    );
+  }
+});
+
 
