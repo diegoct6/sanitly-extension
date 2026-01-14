@@ -1,95 +1,115 @@
 let bubble = null;
-let lastEl = null;
+let activeEl = null;
 
 function isEditable(el) {
-  return el && (
-    el.tagName === "TEXTAREA" ||
-    (el.tagName === "INPUT" && el.type === "text") ||
-    el.isContentEditable
+  return (
+    el &&
+    (el.tagName === "TEXTAREA" ||
+      el.tagName === "INPUT" ||
+      el.isContentEditable)
   );
 }
 
+/* ===== Caret position ===== */
+function getCaretRect() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+
+  const range = sel.getRangeAt(0).cloneRange();
+  range.collapse(true);
+
+  const rects = range.getClientRects();
+  return rects.length ? rects[0] : null;
+}
+
+/* ===== Bubble ===== */
 function createBubble() {
   if (bubble) return;
 
   bubble = document.createElement("div");
   bubble.textContent = "🔒";
-  Object.assign(bubble.style, {
-    position: "absolute",
-    width: "28px",
-    height: "28px",
-    borderRadius: "50%",
-    background: "#2563eb",
-    color: "white",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    zIndex: 2147483647,
-    fontSize: "14px"
-  });
+  bubble.style.position = "absolute";
+  bubble.style.width = "26px";
+  bubble.style.height = "26px";
+  bubble.style.borderRadius = "50%";
+  bubble.style.background = "#2563eb"; // blue
+  bubble.style.color = "#fff";
+  bubble.style.display = "flex";
+  bubble.style.alignItems = "center";
+  bubble.style.justifyContent = "center";
+  bubble.style.cursor = "pointer";
+  bubble.style.zIndex = "2147483647";
+  bubble.style.fontSize = "14px";
 
-  bubble.addEventListener("mousedown", e => {
+  bubble.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!activeEl) return;
+
     chrome.runtime.sendMessage({
       type: "OPEN_PANEL",
-      text: lastEl.value || lastEl.innerText || ""
+      text: activeEl.value || activeEl.innerText || ""
     });
   });
 
   document.body.appendChild(bubble);
 }
 
-function showBubble(el) {
-  createBubble();
-  lastEl = el;
-  const r = el.getBoundingClientRect();
-  bubble.style.top = `${r.bottom + window.scrollY + 6}px`;
-  bubble.style.left = `${r.right + window.scrollX - 30}px`;
+function positionBubble() {
+  const rect = getCaretRect();
+  if (!rect) {
+    bubble.style.display = "none";
+    return;
+  }
+
+  bubble.style.top = `${rect.bottom + window.scrollY + 6}px`;
+  bubble.style.left = `${rect.right + window.scrollX + 6}px`;
   bubble.style.display = "flex";
 }
 
-function hideBubble() {
-  if (bubble) bubble.style.display = "none";
-}
-
-document.addEventListener("focusin", e => {
-  if (isEditable(e.target)) showBubble(e.target);
+/* ===== Events ===== */
+document.addEventListener("selectionchange", () => {
+  if (!activeEl) return;
+  createBubble();
+  positionBubble();
 });
 
-document.addEventListener("focusout", hideBubble);
+document.addEventListener("focusin", (e) => {
+  if (!isEditable(e.target)) return;
+  activeEl = e.target;
+  createBubble();
+  positionBubble();
+});
 
-// 🔥 SAFE UNDERLINE ENGINE
-function underlineText(root, spanText, sensitivity) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const idx = node.textContent.indexOf(spanText);
-    if (idx === -1) continue;
+document.addEventListener("focusout", () => {
+  activeEl = null;
+  if (bubble) bubble.style.display = "none";
+});
 
-    const range = document.createRange();
-    range.setStart(node, idx);
-    range.setEnd(node, idx + spanText.length);
+/* ===== Apply redaction ===== */
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== "APPLY_REDACTION") return;
 
-    const mark = document.createElement("span");
-    mark.textContent = spanText;
-    mark.style.textDecoration = "underline";
-    mark.style.textDecorationThickness = "2px";
-    mark.style.textDecorationColor =
-      sensitivity === "sensitive" ? "#dc2626" : "#2563eb";
+  if (!activeEl) return;
 
-    range.deleteContents();
-    range.insertNode(mark);
-    break;
-  }
-}
+  let text =
+    activeEl.value !== undefined
+      ? activeEl.value
+      : activeEl.innerText;
 
-chrome.runtime.onMessage.addListener(msg => {
-  if (msg.type === "UNDERLINE" && lastEl?.isContentEditable) {
-    msg.items.forEach(i =>
-      underlineText(lastEl, i.span, i.sensitivity)
-    );
+  msg.items.forEach((item) => {
+    if (!item.enabled) return;
+
+    const escaped = item.span.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(escaped, "g");
+    text = text.replace(re, item.replacement);
+  });
+
+  if (activeEl.value !== undefined) {
+    activeEl.value = text;
+  } else {
+    activeEl.innerText = text;
   }
 });
 
