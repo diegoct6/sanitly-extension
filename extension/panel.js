@@ -1,58 +1,64 @@
-const ENDPOINT =
+const SUPABASE_URL =
   "https://fmyczyfgohmslbfstiqu.supabase.co/functions/v1/detect-pii";
 
 let detectedItems = [];
 
-document.getElementById("detectBtn").onclick = async () => {
-  const status = document.getElementById("status");
-  const itemsEl = document.getElementById("items");
+const itemsEl = document.getElementById("items");
+const detectBtn = document.getElementById("detectBtn");
+const applyBtn = document.getElementById("applyBtn");
 
-  status.textContent = "Detecting…";
-  itemsEl.innerHTML = "";
+chrome.storage.session.get("lastText", ({ lastText }) => {
+  window.sourceText = lastText || "";
+});
 
-  chrome.storage.local.get("sanitlyText", async ({ sanitlyText }) => {
-    try {
-      const res = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: sanitlyText || "" })
-      });
+detectBtn.onclick = async () => {
+  itemsEl.innerHTML = "Detecting...";
+  applyBtn.disabled = true;
 
-      const json = await res.json();
-      detectedItems = json.items || [];
+  const res = await fetch(SUPABASE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: window.sourceText })
+  });
 
-      status.textContent = "";
-      renderItems();
-    } catch {
-      status.textContent = "Error detecting PII";
-    }
+  const data = await res.json();
+  detectedItems = data.items || [];
+
+  render();
+};
+
+applyBtn.onclick = () => {
+  let redacted = window.sourceText;
+
+  detectedItems.forEach((i) => {
+    redacted = redacted.replaceAll(i.span, i.replacement);
+  });
+
+  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (text) => {
+        const el = document.activeElement;
+        if (el?.value !== undefined) el.value = text;
+        else if (el?.isContentEditable) el.innerText = text;
+      },
+      args: [redacted]
+    });
   });
 };
 
-function renderItems() {
-  const itemsEl = document.getElementById("items");
+function render() {
   itemsEl.innerHTML = "";
-
-  detectedItems.forEach((item, i) => {
+  detectedItems.forEach((i) => {
     const card = document.createElement("div");
-    card.className = `card ${item.sensitivity}`;
-
+    card.className = `card ${i.sensitivity === "sensitive" ? "sensitive" : "basic"}`;
     card.innerHTML = `
-      <div class="card-header">
-        <span class="badge ${item.sensitivity}">
-          ${item.type} • ${item.sensitivity}
-        </span>
-        <label class="switch">
-          <input type="checkbox" checked data-index="${i}">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="value">${item.span}</div>
-      <div class="hint">${item.explanation}</div>
-      <div class="replacement">Replacement: ${item.replacement}</div>
+      <strong>${i.type}</strong>
+      ${i.span}<br/>
+      <small>${i.explanation}</small>
     `;
-
     itemsEl.appendChild(card);
   });
-}
 
+  applyBtn.disabled = detectedItems.length === 0;
+}

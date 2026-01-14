@@ -1,10 +1,6 @@
-chrome.runtime.onMessage.addListener(function (message, sender) {
-    if (message.type === "OPEN_PANEL") {
-      chrome.storage.local.set({ sanitlyText: message.text }, function () {
-        if (sender.tab && sender.tab.id) {
-          chrome.sidePanel.open({ tabId: sender.tab.id });
-        }
-      });
-    }
-  });
-  
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg.type === "OPEN_PANEL") {
+    chrome.sidePanel.open({ tabId: sender.tab.id });
+    chrome.storage.session.set({ lastText: msg.text });
+  }
+});
