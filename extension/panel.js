@@ -1,4 +1,4 @@
-// panel.js — detect + underline only
+// panel.js — detect + apply redaction
 
 const detectBtn = document.getElementById("detectBtn");
 const applyBtn = document.getElementById("applyBtn");
@@ -7,17 +7,15 @@ const itemsDiv = document.getElementById("items");
 let detected = [];
 let activeTabId = null;
 
-/* ------------------ Helpers ------------------ */
+/* ------------------ UI helpers ------------------ */
 
 function card(item) {
-  const color =
-    item.sensitivity === "sensitive" ? "#fee2e2" : "#eff6ff";
-  const border =
-    item.sensitivity === "sensitive" ? "#dc2626" : "#2563eb";
+  const bg = item.sensitivity === "sensitive" ? "#fee2e2" : "#eff6ff";
+  const border = item.sensitivity === "sensitive" ? "#dc2626" : "#2563eb";
 
   return `
     <div style="
-      background:${color};
+      background:${bg};
       border-left:4px solid ${border};
       padding:10px;
       margin-bottom:8px;
@@ -25,8 +23,8 @@ function card(item) {
       font-size:13px;
     ">
       <strong>${item.type}</strong><br/>
-      <span>${item.span}</span><br/>
-      <small style="opacity:.7">→ ${item.replacement}</small>
+      ${item.span}<br/>
+      <small>→ ${item.replacement}</small>
     </div>
   `;
 }
@@ -45,7 +43,10 @@ detectBtn.onclick = async () => {
 
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId: activeTabId },
-    func: () => document.activeElement?.innerText || document.activeElement?.value || ""
+    func: () =>
+      document.activeElement?.value ||
+      document.activeElement?.innerText ||
+      ""
   });
 
   const res = await fetch(
@@ -61,15 +62,16 @@ detectBtn.onclick = async () => {
   detected = data.items || [];
 
   itemsDiv.innerHTML = detected.map(card).join("");
-
-  chrome.tabs.sendMessage(activeTabId, {
-    type: "UNDERLINE_PII",
-    items: detected
-  });
+  applyBtn.disabled = !detected.length;
 };
 
-/* ------------------ Apply (stub) ------------------ */
+/* ------------------ Apply ------------------ */
 
-applyBtn.onclick = () => {
-  alert("Apply Redaction coming next — underline MVP complete ✅");
+applyBtn.onclick = async () => {
+  if (!activeTabId || !detected.length) return;
+
+  chrome.tabs.sendMessage(activeTabId, {
+    type: "APPLY_REDACTION",
+    items: detected
+  });
 };
